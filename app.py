@@ -1,47 +1,90 @@
-from flask import Flask,render_template,request
+import streamlit as st
 import pickle
 import numpy as np
+import pandas as pd
 
-popular_df = pickle.load(open('popular.pkl','rb'))
-pt = pickle.load(open('pt.pkl','rb'))
-books = pickle.load(open('books.pkl','rb'))
-similarity_scores = pickle.load(open('similarity_scores.pkl','rb'))
+# Load the data
+popular_df = pickle.load(open('popular.pkl', 'rb'))
+pt = pickle.load(open('pt.pkl', 'rb'))
+books = pickle.load(open('books.pkl', 'rb'))
+similarity_scores = pickle.load(open('similarity_scores.pkl', 'rb'))
 
-app = Flask(__name__)
+# Page configuration
+st.set_page_config(
+    page_title="Book Recommendation System",
+    page_icon="📚",
+    layout="wide"
+)
 
-@app.route('/')
-def index():
-    return render_template('index.html',
-                           book_name = list(popular_df['Book-Title'].values),
-                           author=list(popular_df['Book-Author'].values),
-                           image=list(popular_df['Image-URL-M'].values),
-                           votes=list(popular_df['num_ratings'].values),
-                           rating=list(popular_df['avg_rating'].values)
-                           )
+# Title
+st.title("📚 Book Recommendation System")
 
-@app.route('/recommend')
-def recommend_ui():
-    return render_template('recommend.html')
+# Sidebar
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Select Page", ["Home", "Recommend Books"])
 
-@app.route('/recommend_books',methods=['post'])
-def recommend():
-    user_input = request.form.get('user_input')
-    index = np.where(pt.index == user_input)[0][0]
-    similar_items = sorted(list(enumerate(similarity_scores[index])), key=lambda x: x[1], reverse=True)[1:5]
 
-    data = []
-    for i in similar_items:
-        item = []
-        temp_df = books[books['Book-Title'] == pt.index[i[0]]]
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Book-Title'].values))
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Book-Author'].values))
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Image-URL-M'].values))
+# HOME PAGE
+if page == "Home":
 
-        data.append(item)
+    st.header("🔥 Popular Books")
 
-    print(data)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-    return render_template('recommend.html',data=data)
+    for i in range(min(20, len(popular_df))):
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        with [col1, col2, col3, col4, col5][i % 5]:
+
+            st.image(popular_df.iloc[i]['Image-URL-M'])
+
+            st.subheader(popular_df.iloc[i]['Book-Title'])
+
+            st.write("Author:", popular_df.iloc[i]['Book-Author'])
+
+            st.write("Votes:", popular_df.iloc[i]['num_ratings'])
+
+            st.write("Rating:", round(popular_df.iloc[i]['avg_rating'], 2))
+
+
+# RECOMMENDATION PAGE
+elif page == "Recommend Books":
+
+    st.header("🔍 Find Similar Books")
+
+    user_input = st.text_input("Enter a Book Name")
+
+    if st.button("Recommend"):
+
+        if user_input in pt.index:
+
+            index = np.where(pt.index == user_input)[0][0]
+
+            similar_items = sorted(
+                list(enumerate(similarity_scores[index])),
+                key=lambda x: x[1],
+                reverse=True
+            )[1:5]
+
+            st.subheader("✨ Recommended Books")
+
+            cols = st.columns(4)
+
+            for i, item in enumerate(similar_items):
+
+                with cols[i]:
+
+                    temp_df = books[
+                        books['Book-Title'] == pt.index[item[0]]
+                    ].drop_duplicates('Book-Title')
+
+                    if not temp_df.empty:
+
+                        st.image(temp_df.iloc[0]['Image-URL-M'])
+
+                        st.write("**" + temp_df.iloc[0]['Book-Title'] + "**")
+
+                        st.write("Author:", temp_df.iloc[0]['Book-Author'])
+
+        else:
+
+            st.error("Book not found! Please enter a valid book name.")
